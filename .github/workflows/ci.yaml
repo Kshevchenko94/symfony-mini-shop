@@ -1,4 +1,3 @@
----
 name: CI
 
 on:
@@ -31,7 +30,6 @@ jobs:
         with:
           pull: true
           load: true
-          source: .
           files: |
             compose.yaml
             compose.override.yaml
@@ -40,7 +38,13 @@ jobs:
             *.cache-from=type=gha,scope=refs/heads/main
             *.cache-to=type=gha,scope=${{github.ref}},mode=max
       - name: Start services
-        run: docker compose up --wait --no-build
+        run: |
+          docker compose up --detach
+          sleep 20
+          docker compose ps
+      - name: Wait for services to be ready
+        run: |
+          timeout 60 bash -c 'until docker compose exec php php -r "echo \"PHP ready\n\";" 2>/dev/null; do sleep 2; done'
       - name: Check HTTP reachability
         run: curl -v --fail-with-body http://localhost
       - name: Check HTTPS reachability
@@ -55,6 +59,7 @@ jobs:
         run: docker compose exec -T php bin/phpunit
       - name: Doctrine Schema Validator
         run: docker compose exec -T php bin/console -e test doctrine:schema:validate
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -68,6 +73,25 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo, sqlite, pdo_sqlite, gd, zip
+          coverage: none
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader
+        if: hashFiles('**/composer.json') != ''
       - name: Lint Code Base
         uses: super-linter/super-linter/slim@v8
         env:
