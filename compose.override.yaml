@@ -1,6 +1,11 @@
 ---
 # Development environment override
 services:
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8081:8080"
   php:
     build:
       context: .
@@ -24,3 +29,9 @@ services:
     tty: true
 ###> symfony/mercure-bundle ###
 ###< symfony/mercure-bundle ###
+
+###> doctrine/doctrine-bundle ###
+  database:
+    ports:
+      - "3306"
+###< doctrine/doctrine-bundle ###
